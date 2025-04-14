@@ -1,34 +1,27 @@
 import React, { useState, useEffect } from 'react';
-import { getMedicationPurchaseHistory, getContract, getTransactionHistory } from '../utils/web3';
+import { getTransactionHistory, getMedicationPurchaseHistory, getContractAddress } from '../utils/web3';
 
 const TransactionHistory = ({ account }) => {
   const [history, setHistory] = useState([]);
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [contractAddress, setContractAddress] = useState('');
   
   useEffect(() => {
     if (account) {
       fetchTransactionHistory();
-      
-      // Get contract address for Etherscan links
-      try {
-        const contract = getContract();
-        setContractAddress(contract.address);
-      } catch (error) {
-        console.error('Error getting contract address:', error);
-      }
-      
-      // Fetch transaction history from localStorage
-      const txHistory = getTransactionHistory();
-      setTransactions(txHistory);
     }
   }, [account]);
   
   const fetchTransactionHistory = async () => {
     try {
       setLoading(true);
+      
+      // Get transaction history from localStorage
+      const txHistory = getTransactionHistory();
+      setTransactions(txHistory);
+      
+      // Get medication purchase history
       const purchaseHistory = await getMedicationPurchaseHistory(account);
       setHistory(purchaseHistory);
     } catch (error) {
@@ -39,7 +32,7 @@ const TransactionHistory = ({ account }) => {
     }
   };
   
-  // Helper function to get medication name from ID (simple implementation for demo)
+  // Helper function to get medication name from ID
   const getMedicationName = (medicationId) => {
     const medicationNames = {
       'MED001': 'Aspirin',
@@ -59,6 +52,7 @@ const TransactionHistory = ({ account }) => {
   
   // Generate Etherscan link for the contract
   const getContractEtherscanLink = () => {
+    const contractAddress = getContractAddress();
     if (!contractAddress) return '';
     return `https://sepolia.etherscan.io/address/${contractAddress}`;
   };
@@ -83,7 +77,7 @@ const TransactionHistory = ({ account }) => {
     <div className="mt-8">
       <h2 className="text-2xl font-bold mb-6">Transaction History</h2>
       
-      {contractAddress && (
+      {getContractAddress() && (
         <div className="mb-6">
           <p className="text-gray-600 mb-2">Contract Address:</p>
           <a 
@@ -92,14 +86,14 @@ const TransactionHistory = ({ account }) => {
             rel="noopener noreferrer"
             className="text-blue-600 hover:underline break-all flex items-center"
           >
-            {contractAddress}
+            {getContractAddress()}
             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
             </svg>
           </a>
           <p className="text-sm text-gray-500 mt-1">
             View all contract transactions: <a 
-              href={`https://sepolia.etherscan.io/address/${contractAddress}#transactions`} 
+              href={`https://sepolia.etherscan.io/address/${getContractAddress()}#transactions`} 
               target="_blank" 
               rel="noopener noreferrer"
               className="text-blue-600 hover:underline"
@@ -110,8 +104,8 @@ const TransactionHistory = ({ account }) => {
         </div>
       )}
       
-      {/* Insurance Purchases & Medication Purchases Section */}
-      {transactions.length > 0 && (
+      {/* Recent Blockchain Transactions */}
+      {transactions.length > 0 ? (
         <div className="mb-8">
           <h3 className="text-xl font-semibold mb-4">Recent Blockchain Transactions</h3>
           <div className="overflow-x-auto mb-6">
@@ -155,9 +149,16 @@ const TransactionHistory = ({ account }) => {
             </table>
           </div>
         </div>
+      ) : (
+        <div className="mb-8">
+          <h3 className="text-xl font-semibold mb-4">Recent Blockchain Transactions</h3>
+          <div className="bg-gray-100 text-gray-600 p-6 rounded-lg text-center">
+            No transaction history found.
+          </div>
+        </div>
       )}
       
-      {/* Medication Purchase History Section */}
+      {/* Medication Purchase History */}
       <h3 className="text-xl font-semibold mb-4">Medication Purchase History</h3>
       <div className="overflow-x-auto">
         {history.length > 0 ? (

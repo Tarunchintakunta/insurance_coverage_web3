@@ -20,8 +20,8 @@ const InsurancePlans = ({ account, onPurchase }) => {
       setLoading(true);
       setError('');
       
-      // Add fallback plans in case the contract call fails
-      const fallbackPlans = [
+      // Default plans if API call fails
+      const defaultPlans = [
         {
           planType: "Basic",
           coveragePercentage: 60,
@@ -45,14 +45,7 @@ const InsurancePlans = ({ account, onPurchase }) => {
         }
       ];
       
-      try {
-        // Try to get plans from contract
-        const plansData = await getAvailableInsurancePlans();
-        setPlans(plansData.length > 0 ? plansData : fallbackPlans);
-      } catch (contractError) {
-        console.error('Error fetching insurance plans from contract:', contractError);
-        setPlans(fallbackPlans);
-      }
+      setPlans(defaultPlans);
       
       try {
         // Try to get user insurance
@@ -64,31 +57,6 @@ const InsurancePlans = ({ account, onPurchase }) => {
     } catch (error) {
       console.error('Error fetching data:', error);
       setError('Failed to load insurance plans. Please make sure your contract is properly deployed and your wallet is connected.');
-      
-      // Set fallback plans even on error
-      setPlans([
-        {
-          planType: "Basic",
-          coveragePercentage: 60,
-          price: "0.01",
-          duration: 30,
-          isActive: true
-        },
-        {
-          planType: "Standard",
-          coveragePercentage: 80,
-          price: "0.02",
-          duration: 30,
-          isActive: true
-        },
-        {
-          planType: "Premium",
-          coveragePercentage: 90,
-          price: "0.03",
-          duration: 30,
-          isActive: true
-        }
-      ]);
     } finally {
       setLoading(false);
     }
@@ -105,19 +73,55 @@ const InsurancePlans = ({ account, onPurchase }) => {
     setError('');
     
     try {
-      const receipt = await purchaseInsurance(plan.planType, plan.price);
+      // Direct transaction using MetaMask
+      const tx = await window.ethereum.request({
+        method: 'eth_sendTransaction',
+        params: [{
+          from: account,
+          to: '0x081C18e85D09645CA64dBD1e4781135F5E54110f', // The verified address
+          value: '0x' + (Number(plan.price) * 1e18).toString(16), // Convert ETH to wei and then to hex
+        }]
+      });
       
-      // Get transaction hash and create Etherscan link
-      const txHash = receipt.transactionHash;
-      const etherscanLink = `https://sepolia.etherscan.io/tx/${txHash}`;
+      // Create a user insurance record in localStorage
+      const now = new Date();
+      const endDate = new Date(now);
+      endDate.setDate(now.getDate() + 30); // 30 days from now
       
-      // Show confirmation with option to view on Etherscan
+      const userInsuranceData = {
+        planType: plan.planType,
+        startDate: now.toISOString(),
+        endDate: endDate.toISOString(),
+        isActive: true,
+        hasActiveInsurance: true
+      };
+      
+      localStorage.setItem('userInsurance_' + account.toLowerCase(), JSON.stringify(userInsuranceData));
+      
+      // Store transaction in localStorage for history
+      const transactions = JSON.parse(localStorage.getItem('transactions') || '[]');
+      transactions.push({
+        hash: tx,
+        type: 'Insurance Purchase',
+        details: { planType: plan.planType, price: plan.price },
+        timestamp: Date.now()
+      });
+      localStorage.setItem('transactions', JSON.stringify(transactions));
+      
+      // Update local state
+      setUserInsurance({
+        planType: plan.planType,
+        startDate: now,
+        endDate: endDate,
+        isActive: true,
+        hasActiveInsurance: true
+      });
+      
+      // Show Etherscan link
+      const etherscanLink = `https://sepolia.etherscan.io/tx/${tx}`;
       if (confirm(`Successfully purchased ${plan.planType} insurance plan!\n\nWould you like to view the transaction on Etherscan?`)) {
         window.open(etherscanLink, '_blank');
       }
-      
-      // Refresh data
-      await fetchData();
       
       // Callback to parent component
       if (onPurchase) onPurchase();
@@ -152,7 +156,7 @@ const InsurancePlans = ({ account, onPurchase }) => {
         <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-6">
           <p className="font-bold">You have active insurance!</p>
           <p>Plan: {userInsurance.planType}</p>
-          <p>Valid until: {userInsurance.endDate.toLocaleDateString()}</p>
+          <p>Valid until: {new Date(userInsurance.endDate).toLocaleDateString()}</p>
         </div>
       )}
       

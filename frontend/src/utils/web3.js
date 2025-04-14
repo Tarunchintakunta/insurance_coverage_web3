@@ -1,5 +1,4 @@
 import { ethers } from 'ethers';
-import HealthInsuranceArtifact from '../artifacts/contracts/HealthInsurance.sol/HealthInsurance.json';
 
 // Contract address will be updated after deployment
 let CONTRACT_ADDRESS = '';
@@ -124,32 +123,60 @@ export const getBalance = async (address) => {
   }
 };
 
-// Get the contract instance
-export const getContract = () => {
-  if (!isMetaMaskInstalled()) {
-    throw new Error('MetaMask is not installed!');
-  }
-
-  if (!CONTRACT_ADDRESS) {
-    const storedAddress = getContractAddress();
-    if (!storedAddress) {
-      throw new Error('Contract address not set');
-    }
-  }
-
+// Get user's insurance details
+export const getUserInsurance = async (address) => {
+  // Check localStorage first
   try {
-    const provider = new ethers.providers.Web3Provider(window.ethereum);
-    const signer = provider.getSigner();
-    const contract = new ethers.Contract(
-      CONTRACT_ADDRESS,
-      HealthInsuranceArtifact.abi,
-      signer
-    );
-    return contract;
-  } catch (error) {
-    console.error('Failed to get contract:', error);
-    throw new Error(`Failed to get contract: ${error.message}`);
+    const storedInsurance = localStorage.getItem('userInsurance_' + address.toLowerCase());
+    if (storedInsurance) {
+      const insurance = JSON.parse(storedInsurance);
+      return {
+        planType: insurance.planType,
+        startDate: new Date(insurance.startDate),
+        endDate: new Date(insurance.endDate),
+        isActive: insurance.isActive,
+        hasActiveInsurance: insurance.hasActiveInsurance
+      };
+    }
+  } catch (e) {
+    console.error('Error parsing stored insurance:', e);
   }
+  
+  // Return default if no stored insurance
+  return {
+    planType: '',
+    startDate: new Date(),
+    endDate: new Date(),
+    isActive: false,
+    hasActiveInsurance: false
+  };
+};
+
+// Get available insurance plans
+export const getAvailableInsurancePlans = async () => {
+  return [
+    {
+      planType: "Basic",
+      coveragePercentage: 60,
+      price: "0.01",
+      duration: 30,
+      isActive: true
+    },
+    {
+      planType: "Standard",
+      coveragePercentage: 80,
+      price: "0.02",
+      duration: 30,
+      isActive: true
+    },
+    {
+      planType: "Premium",
+      coveragePercentage: 90,
+      price: "0.03",
+      duration: 30,
+      isActive: true
+    }
+  ];
 };
 
 // Store transaction in localStorage
@@ -178,147 +205,6 @@ export const storeTransaction = (txHash, type, details) => {
   return newTx;
 };
 
-// Get user's insurance details
-export const getUserInsurance = async (address) => {
-  try {
-    const contract = getContract();
-    const insurance = await contract.getUserInsurance(address);
-    return {
-      planType: insurance.planType,
-      startDate: new Date(insurance.startDate.toNumber() * 1000),
-      endDate: new Date(insurance.endDate.toNumber() * 1000),
-      isActive: insurance.isActive,
-      hasActiveInsurance: insurance.hasActiveInsurance
-    };
-  } catch (error) {
-    console.error('Failed to get user insurance:', error);
-    // Return a default object
-    return {
-      planType: '',
-      startDate: new Date(),
-      endDate: new Date(),
-      isActive: false,
-      hasActiveInsurance: false
-    };
-  }
-};
-
-// Get available insurance plans
-export const getAvailableInsurancePlans = async () => {
-  try {
-    const contract = getContract();
-    const plans = await contract.getAvailableInsurancePlans();
-    
-    return [
-      {
-        planType: plans.basic.planType,
-        coveragePercentage: plans.basic.coveragePercentage.toNumber(),
-        price: ethers.utils.formatEther(plans.basic.price),
-        duration: plans.basic.duration.toNumber() / (24 * 60 * 60), // Convert to days
-        isActive: plans.basic.isActive
-      },
-      {
-        planType: plans.standard.planType,
-        coveragePercentage: plans.standard.coveragePercentage.toNumber(),
-        price: ethers.utils.formatEther(plans.standard.price),
-        duration: plans.standard.duration.toNumber() / (24 * 60 * 60), // Convert to days
-        isActive: plans.standard.isActive
-      },
-      {
-        planType: plans.premium.planType,
-        coveragePercentage: plans.premium.coveragePercentage.toNumber(),
-        price: ethers.utils.formatEther(plans.premium.price),
-        duration: plans.premium.duration.toNumber() / (24 * 60 * 60), // Convert to days
-        isActive: plans.premium.isActive
-      }
-    ];
-  } catch (error) {
-    console.error('Failed to get insurance plans:', error);
-    throw new Error(`Failed to get insurance plans: ${error.message}`);
-  }
-};
-
-// Purchase insurance plan
-export const purchaseInsurance = async (planType, price) => {
-  try {
-    const contract = getContract();
-    const tx = await contract.purchaseInsurance(planType, {
-      value: ethers.utils.parseEther(price.toString())
-    });
-    
-    // Store transaction hash
-    storeTransaction(
-      tx.hash,
-      'Insurance Purchase',
-      { planType, price }
-    );
-    
-    return await tx.wait();
-  } catch (error) {
-    console.error('Failed to purchase insurance:', error);
-    throw new Error(`Failed to purchase insurance: ${error.message}`);
-  }
-};
-
-// Get medication coverage
-export const getMedicationCoverage = async (medicationId, address) => {
-  try {
-    const contract = getContract();
-    const coverage = await contract.getMedicationCoverage(medicationId, address);
-    
-    return {
-      originalPrice: ethers.utils.formatEther(coverage.originalPrice),
-      coveredPrice: ethers.utils.formatEther(coverage.coveredPrice),
-      coPayAmount: ethers.utils.formatEther(coverage.coPayAmount),
-      hasCoverage: coverage.hasCoverage
-    };
-  } catch (error) {
-    console.error('Failed to get medication coverage:', error);
-    throw new Error(`Failed to get medication coverage: ${error.message}`);
-  }
-};
-
-// Purchase medication
-export const purchaseMedication = async (medicationId, amount) => {
-  try {
-    const contract = getContract();
-    const tx = await contract.purchaseMedication(medicationId, {
-      value: ethers.utils.parseEther(amount.toString())
-    });
-    
-    // Store transaction hash
-    storeTransaction(
-      tx.hash,
-      'Medication Purchase',
-      { medicationId, amount }
-    );
-    
-    return await tx.wait();
-  } catch (error) {
-    console.error('Failed to purchase medication:', error);
-    throw new Error(`Failed to purchase medication: ${error.message}`);
-  }
-};
-
-// Get medication purchase history
-export const getMedicationPurchaseHistory = async (address) => {
-  try {
-    const contract = getContract();
-    const history = await contract.getMedicationPurchaseHistory(address);
-    
-    return history.map(purchase => ({
-      medicationId: purchase.medicationId,
-      originalPrice: ethers.utils.formatEther(purchase.originalPrice),
-      coveredPrice: ethers.utils.formatEther(purchase.coveredPrice),
-      coPayAmount: ethers.utils.formatEther(purchase.coPayAmount),
-      purchaseDate: new Date(purchase.purchaseDate.toNumber() * 1000)
-    }));
-  } catch (error) {
-    console.error('Failed to get medication purchase history:', error);
-    return []; // Return empty array on error
-  }
-};
-
 // Get stored transactions from localStorage
 export const getTransactionHistory = () => {
   const storedTransactions = localStorage.getItem('transactions');
@@ -333,30 +219,134 @@ export const getTransactionHistory = () => {
   return [];
 };
 
+// Simplified version for medication coverage
+export const getMedicationCoverage = async (medicationId, address) => {
+  // Check if user has insurance
+  const insurance = await getUserInsurance(address);
+  const hasCoverage = insurance.hasActiveInsurance;
+  
+  // Default medication data
+  const medications = {
+    'MED001': { name: 'Aspirin', price: '0.005' },
+    'MED002': { name: 'Amoxicillin', price: '0.01' },
+    'MED003': { name: 'Lipitor', price: '0.02' },
+    'MED004': { name: 'Insulin', price: '0.025' },
+    'MED005': { name: 'Ibuprofen', price: '0.004' }
+  };
+  
+  if (!medications[medicationId]) {
+    throw new Error('Medication not found');
+  }
+  
+  const originalPrice = medications[medicationId].price;
+  let coveragePercentage = 0;
+  
+  if (hasCoverage) {
+    switch (insurance.planType) {
+      case 'Basic': coveragePercentage = 60; break;
+      case 'Standard': coveragePercentage = 80; break;
+      case 'Premium': coveragePercentage = 90; break;
+      default: coveragePercentage = 0;
+    }
+  }
+  
+  const coveredPrice = parseFloat(originalPrice) * (coveragePercentage / 100);
+  const coPayAmount = parseFloat(originalPrice) - coveredPrice;
+  
+  return {
+    originalPrice: originalPrice,
+    coveredPrice: coveredPrice.toFixed(6),
+    coPayAmount: coPayAmount.toFixed(6),
+    hasCoverage: hasCoverage
+  };
+};
+
 // Check if a medication exists
 export const isMedicationAvailable = async (medicationId) => {
-  try {
-    const contract = getContract();
-    return await contract.isMedicationAvailable(medicationId);
-  } catch (error) {
-    console.error('Failed to check medication availability:', error);
-    return false;
-  }
+  const medications = [
+    'MED001', 'MED002', 'MED003', 'MED004', 'MED005'
+  ];
+  return medications.includes(medicationId);
 };
 
 // Get medication details
 export const getMedicationDetails = async (medicationId) => {
+  const medications = {
+    'MED001': { name: 'Aspirin', price: '0.005' },
+    'MED002': { name: 'Amoxicillin', price: '0.01' },
+    'MED003': { name: 'Lipitor', price: '0.02' },
+    'MED004': { name: 'Insulin', price: '0.025' },
+    'MED005': { name: 'Ibuprofen', price: '0.004' }
+  };
+  
+  if (!medications[medicationId]) {
+    throw new Error('Medication not found');
+  }
+  
+  return {
+    id: medicationId,
+    name: medications[medicationId].name,
+    price: medications[medicationId].price
+  };
+};
+
+// Purchase medication
+export const purchaseMedication = async (medicationId, amount) => {
   try {
-    const contract = getContract();
-    const details = await contract.getMedicationDetails(medicationId);
+    // Direct transaction using MetaMask
+    const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+    const from = accounts[0];
     
+    const tx = await window.ethereum.request({
+      method: 'eth_sendTransaction',
+      params: [{
+        from: from,
+        to: VERIFIED_ADDRESS,
+        value: '0x' + (Number(amount) * 1e18).toString(16), // Convert ETH to wei and then to hex
+      }]
+    });
+    
+    // Store transaction in localStorage
+    storeTransaction(
+      tx,
+      'Medication Purchase',
+      { medicationId, amount }
+    );
+    
+    // Return a simplified receipt object
     return {
-      id: details.id,
-      name: details.name,
-      price: ethers.utils.formatEther(details.price)
+      transactionHash: tx,
+      status: 1 // Success
     };
   } catch (error) {
-    console.error('Failed to get medication details:', error);
-    throw new Error(`Failed to get medication details: ${error.message}`);
+    console.error('Failed to purchase medication:', error);
+    throw new Error(`Failed to purchase medication: ${error.message}`);
   }
+};
+
+// Get medication purchase history
+export const getMedicationPurchaseHistory = async (address) => {
+  const transactions = getTransactionHistory();
+  return transactions
+    .filter(tx => tx.type === 'Medication Purchase')
+    .map(tx => {
+      const medicationId = tx.details.medicationId;
+      const medications = {
+        'MED001': { name: 'Aspirin', price: '0.005' },
+        'MED002': { name: 'Amoxicillin', price: '0.01' },
+        'MED003': { name: 'Lipitor', price: '0.02' },
+        'MED004': { name: 'Insulin', price: '0.025' },
+        'MED005': { name: 'Ibuprofen', price: '0.004' }
+      };
+      
+      const medication = medications[medicationId] || { name: 'Unknown', price: '0' };
+      
+      return {
+        medicationId: medicationId,
+        originalPrice: medication.price,
+        coveredPrice: '0',
+        coPayAmount: tx.details.amount,
+        purchaseDate: new Date(tx.timestamp)
+      };
+    });
 };
